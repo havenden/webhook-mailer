@@ -202,7 +202,7 @@ func (a *app) listHooks(w http.ResponseWriter) {
 		return
 	}
 	defer rows.Close()
-	var out []map[string]any
+	out := make([]map[string]any, 0)
 	for rows.Next() {
 		h, e := scanHook(rows)
 		if e != nil {
@@ -309,7 +309,7 @@ func (a *app) listRecipients(w http.ResponseWriter) {
 		return
 	}
 	defer rows.Close()
-	var out []recipient
+	out := make([]recipient, 0)
 	for rows.Next() {
 		var x recipient
 		if e = rows.Scan(&x.ID, &x.Email, &x.Enabled, &x.AddedAt); e != nil {
