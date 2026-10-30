@@ -102,6 +102,18 @@ func newApp() (*app, error) {
 	if err = a.migrate(); err != nil {
 		return nil, err
 	}
+	go func() {
+		for range time.Tick(time.Hour) {
+			now := time.Now()
+			a.mu.Lock()
+			for k, exp := range a.sessions {
+				if now.After(exp) {
+					delete(a.sessions, k)
+				}
+			}
+			a.mu.Unlock()
+		}
+	}()
 	return a, nil
 }
 func (a *app) migrate() error {
@@ -436,30 +448,35 @@ func (a *app) receive(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 404, "接口不存在")
 		return
 	}
-	rows, e := a.db.Query(`SELECT email FROM recipients WHERE enabled=TRUE`)
+	var to []string
+	var rows *sql.Rows
+	if len(h.RecipientIDs) == 0 {
+		rows, e = a.db.Query(`SELECT email FROM recipients WHERE enabled=TRUE`)
+	} else {
+		qs := make([]string, len(h.RecipientIDs))
+		args := make([]any, len(h.RecipientIDs))
+		for i, id := range h.RecipientIDs {
+			qs[i] = "?"
+			args[i] = id
+		}
+		rows, e = a.db.Query(`SELECT email FROM recipients WHERE enabled=TRUE AND id IN (`+strings.Join(qs, ",")+`)`, args...)
+	}
 	if e != nil {
 		writeError(w, 500, e.Error())
 		return
 	}
-	var to []string
-	chosen := map[int64]bool{}
-	for _, id := range h.RecipientIDs {
-		chosen[id] = true
-	}
+	defer rows.Close()
 	for rows.Next() {
 		var email string
-		rows.Scan(&email)
-		if len(chosen) == 0 {
-			to = append(to, email)
-			continue
-		}
-		var id int64
-		a.db.QueryRow(`SELECT id FROM recipients WHERE email=?`, email).Scan(&id)
-		if chosen[id] {
+		if err := rows.Scan(&email); err == nil {
 			to = append(to, email)
 		}
 	}
 	rows.Close()
+	if err := rows.Err(); err != nil {
+		writeError(w, 500, err.Error())
+		return
+	}
 	if len(to) == 0 {
 		writeError(w, 409, "没有启用的收件邮箱")
 		return
@@ -613,6 +630,22 @@ func loadEnvFile(path string) error {
 	}
 	return nil
 }
+
+type statusWriter struct {
+	http.ResponseWriter
+	code int
+}
+
+func (w *statusWriter) WriteHeader(c int) {
+	w.code = c
+	w.ResponseWriter.WriteHeader(c)
+}
+
 func logging(n http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { n.ServeHTTP(w, r) })
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		sw := &statusWriter{ResponseWriter: w, code: 200}
+		n.ServeHTTP(sw, r)
+		log.Printf("%s %s %d %s %s", r.Method, r.URL.Path, sw.code, time.Since(start).Round(time.Millisecond), r.RemoteAddr)
+	})
 }
