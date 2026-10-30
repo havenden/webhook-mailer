@@ -522,12 +522,20 @@ func sendMail(s smtpSettings, p string, to []string, name string, r *http.Reques
 	if e != nil {
 		return e
 	}
-	msg := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n%s", s.FromEmail, strings.Join(to, ","), mime.QEncoding.Encode("UTF-8", "Webhook: "+name), formatWebhookHTML(name, r, b))
+	msg := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n%s", s.FromEmail, strings.Join(to, ","), mime.QEncoding.Encode("UTF-8", "Webhook: "+name), foldHTMLLines(formatWebhookHTML(name, r, b)))
 	_, e = d.Write([]byte(msg))
 	if x := d.Close(); e == nil {
 		e = x
 	}
 	return e
+}
+
+// foldHTMLLines breaks the HTML body after every tag-closing '>' so no line
+// exceeds the 998-octet SMTP limit (RFC 5321). The body is fully
+// HTML-escaped, so every '>' is a template tag closer and the newlines
+// render as harmless whitespace.
+func foldHTMLLines(b string) string {
+	return strings.ReplaceAll(b, ">", ">\r\n")
 }
 
 func formatWebhookHTML(hookName string, r *http.Request, body []byte) string {
