@@ -7,8 +7,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"log"
+	"mime"
 	"net"
 	"net/http"
 	"net/mail"
@@ -502,12 +504,40 @@ func sendMail(s smtpSettings, p string, to []string, name string, r *http.Reques
 	if e != nil {
 		return e
 	}
-	msg := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: Webhook: %s\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\nMethod: %s\nURL: %s\nQuery: %s\n\n%s", s.FromEmail, strings.Join(to, ","), name, r.Method, r.URL.String(), r.URL.Query().Encode(), b)
+	msg := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n%s", s.FromEmail, strings.Join(to, ","), mime.QEncoding.Encode("UTF-8", "Webhook: "+name), formatWebhookHTML(name, r, b))
 	_, e = d.Write([]byte(msg))
 	if x := d.Close(); e == nil {
 		e = x
 	}
 	return e
+}
+
+func formatWebhookHTML(hookName string, r *http.Request, body []byte) string {
+	var payload map[string]any
+	_ = json.Unmarshal(body, &payload)
+	contact := ""
+	if payload != nil {
+		name, hasName := payload["name"]
+		phone, hasPhone := payload["phone"]
+		if hasName || hasPhone {
+			contact = `<section style="margin:20px 0;padding:16px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px"><h2 style="margin:0 0 12px;font-size:16px;color:#1d4ed8">联系人信息</h2>`
+			if hasName {
+				contact += `<p style="margin:6px 0"><strong>姓名：</strong>` + html.EscapeString(fmt.Sprint(name)) + `</p>`
+			}
+			if hasPhone {
+				contact += `<p style="margin:6px 0"><strong>电话：</strong><a href="tel:` + html.EscapeString(fmt.Sprint(phone)) + `">` + html.EscapeString(fmt.Sprint(phone)) + `</a></p>`
+			}
+			contact += `</section>`
+		}
+	}
+	pretty := string(body)
+	var raw any
+	if json.Unmarshal(body, &raw) == nil {
+		if formatted, err := json.MarshalIndent(raw, "", "  "); err == nil {
+			pretty = string(formatted)
+		}
+	}
+	return `<!doctype html><html><body style="margin:0;padding:24px;background:#f6f8fb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;color:#1f2937"><main style="max-width:680px;margin:auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden"><header style="padding:18px 22px;background:#172554;color:#fff"><h1 style="margin:0;font-size:20px">` + html.EscapeString(hookName) + `</h1><p style="margin:6px 0 0;color:#bfdbfe;font-size:13px">收到一条接口推送</p></header><div style="padding:22px"><table style="width:100%;border-collapse:collapse;font-size:14px"><tr><td style="padding:6px 0;color:#64748b;width:88px">请求方法</td><td><strong>` + html.EscapeString(r.Method) + `</strong></td></tr><tr><td style="padding:6px 0;color:#64748b">请求地址</td><td style="word-break:break-all">` + html.EscapeString(r.URL.String()) + `</td></tr><tr><td style="padding:6px 0;color:#64748b">查询参数</td><td>` + html.EscapeString(r.URL.Query().Encode()) + `</td></tr></table>` + contact + `<h2 style="font-size:16px;margin:20px 0 10px">完整数据</h2><pre style="margin:0;padding:14px;white-space:pre-wrap;word-break:break-word;background:#0f172a;color:#e2e8f0;border-radius:8px;font-size:13px;line-height:1.55">` + html.EscapeString(pretty) + `</pre></div></main></body></html>`
 }
 func randomID(n int) (string, error) {
 	b := make([]byte, n)
