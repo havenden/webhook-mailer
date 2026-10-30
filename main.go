@@ -487,7 +487,8 @@ func (a *app) receive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if e = sendMail(s, a.smtpPassword, to, h.Name, r, body); e != nil {
-		writeError(w, 502, "邮件投递失败")
+		log.Printf("send mail failed: %v", e)
+		writeError(w, 502, "邮件投递失败: "+e.Error())
 		return
 	}
 	writeJSON(w, 202, map[string]any{"status": "accepted", "recipients": len(to)})
