@@ -60,7 +60,13 @@ func main() {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", a.health)
-	mux.HandleFunc("GET /", serveLogin)
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		serveLogin(w, r)
+	})
 	mux.HandleFunc("GET /admin", serveAdmin)
 	mux.HandleFunc("GET /static/app.js", serveJS)
 	mux.HandleFunc("GET /static/style.css", serveCSS)
