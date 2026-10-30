@@ -73,6 +73,9 @@ func main() {
 	log.Fatal(http.ListenAndServe(addr, logging(mux)))
 }
 func newApp() (*app, error) {
+	if err := loadEnvFile(env("ENV_FILE", ".env")); err != nil {
+		return nil, err
+	}
 	dsn := os.Getenv("MYSQL_DSN")
 	if dsn == "" {
 		return nil, fmt.Errorf("MYSQL_DSN must be configured")
@@ -541,6 +544,30 @@ func envBool(k string, f bool) bool {
 		return f
 	}
 	return v == "1" || strings.EqualFold(v, "true")
+}
+func loadEnvFile(path string) error {
+	b, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read %s: %w", path, err)
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, value, ok := strings.Cut(line, "=")
+		if !ok || strings.TrimSpace(key) == "" {
+			return fmt.Errorf("invalid .env line: %q", line)
+		}
+		key, value = strings.TrimSpace(key), strings.Trim(strings.TrimSpace(value), `"'`)
+		if os.Getenv(key) == "" {
+			_ = os.Setenv(key, value)
+		}
+	}
+	return nil
 }
 func logging(n http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { n.ServeHTTP(w, r) })

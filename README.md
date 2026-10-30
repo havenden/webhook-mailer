@@ -12,7 +12,7 @@ CREATE USER 'webhook_user'@'127.0.0.1' IDENTIFIED BY '替换为强密码';
 GRANT ALL PRIVILEGES ON webhook_mailer.* TO 'webhook_user'@'127.0.0.1';
 ```
 
-2. 按 `.env.example` 设置环境变量。首次启动会自动创建所需数据表。
+2. 复制 `.env.example` 为 `.env`，填写其中的 MySQL、管理员和 SMTP 配置。程序启动时会自动读取当前目录的 `.env`；首次启动会自动创建所需数据表。
 
 3. 启动：
 
