@@ -1,0 +1,5 @@
+.env
+data/
+outputs/
+webhook-mailer
+.DS_Store

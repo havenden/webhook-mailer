@@ -1,0 +1,18 @@
+[Unit]
+Description=Webhook Mailer
+After=network.target mysqld.service
+
+[Service]
+Type=simple
+User=webhook
+Group=webhook
+WorkingDirectory=/opt/webhook-mailer
+EnvironmentFile=/opt/webhook-mailer/.env
+ExecStart=/opt/webhook-mailer/webhook-mailer
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
