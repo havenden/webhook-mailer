@@ -515,8 +515,16 @@ func sendMail(s smtpSettings, p string, to []string, name string, r *http.Reques
 func formatWebhookHTML(hookName string, r *http.Request, body []byte) string {
 	var payload map[string]any
 	_ = json.Unmarshal(body, &payload)
+	if payload == nil {
+		payload = make(map[string]any)
+	}
+	for _, key := range []string{"name", "phone"} {
+		if value := r.URL.Query().Get(key); value != "" {
+			payload[key] = value
+		}
+	}
 	contact := ""
-	if payload != nil {
+	if len(payload) > 0 {
 		name, hasName := payload["name"]
 		phone, hasPhone := payload["phone"]
 		if hasName || hasPhone {
